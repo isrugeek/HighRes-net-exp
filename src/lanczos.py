@@ -2,6 +2,7 @@
 
 
 import torch
+import torchgeometry as tgm
 import numpy as np
 
 
@@ -106,3 +107,23 @@ def lanczos_shift(img, shift, p=3, a=3):
     I_s = I_s[..., p:-p, p:-p]  # remove padding
 
     return I_s.squeeze()  # , k.squeeze()
+    
+def bilinear(I, theta, mode='translation',device='cpu'):
+    ## shift images I (B,C,H,W) by traslation theta (b,2)
+    theta = theta
+    H = torch.eye(3).to(device)
+    H = H.repeat(I.size()[0], 1).view(-1, 3, 3)
+    H[:,0,2] = theta[:,0] # tx
+    H[:,1,2] = theta[:,1] # ty
+
+    if mode == 'rototranslation':
+        H[:, 0, 0] = torch.cos(theta[:, 2])  # cos
+        H[:,0,1] = -torch.sin(theta[:,2]) # -sin
+        H[:,1,0] = torch.sin(theta[:,2]) # sin
+        H[:,1,1] = torch.cos(theta[:,2]) # cos
+    new_I = tgm.warp_perspective(I, H, dsize=(I.size()[2], I.size()[3]))  # bilinear interpolation
+    return new_I
+    
+
+
+

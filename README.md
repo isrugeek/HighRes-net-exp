@@ -1,3 +1,5 @@
+*This repo is expermintal repo, the original repo can be found Here* [HighRes-net](https://github.com/ElementAI/HighRes-net) 
+
 # HighRes-net: Multi Frame Super-Resolution by Recursive Fusion
 
 Pytorch implementation of HighRes-net, a neural network for multi frame super-resolution (MFSR), trained and tested on the [European Space Agency's Kelvin competition](https://kelvins.esa.int/proba-v-super-resolution/home/).
@@ -27,12 +29,12 @@ If your available GPU memory is less than 32G, try following to reduce the memor
 
 (1) Work with smaller batches (`batch_size` in config.json)
 
-(2) Work with less low-res views (`n_views` and `min_L` in config.json, `min_L` is minimum number of views (`n_views`)) 
+(2) Work with less low-res views (`n_views` and `min_L` in config.json)
 
 According to our experiments, we estimated the memory consumption (in GB) given `batch_size` and `n_views` 
 
 
-|   `batch_size` \ `n_views` and `min_L`|**32**| **16**| **4**|
+|   `batch_size` \ `n_views`|**32**| **16**| **4**|
 | ----------- |:------:| -----:|  -----:|
 | **32** | 27 | 15 | 6|
 | **16** | 15 | 8 | 4 |
@@ -43,7 +45,7 @@ According to our experiments, we estimated the memory consumption (in GB) given 
 - Setup a python environment and install dependencies, we need python version >= 3.6.8
 
 ```
-pip install -r requirements.txt
+pip install requirements.txt
 ```
 
 #### 1. Load [data](https://kelvins.esa.int/proba-v-super-resolution/data/) and save clearance
@@ -73,9 +75,6 @@ tensorboard --logdir='tb_logs/'
 #### 3. Test model
 
 - Open jupyter notebook and run notebooks/test_model.ipynb
-- We assume the jupyter notebook server runs in project root directory. If you start it in somewhere else, 
-please change the file path in notebooks accordingly 
-
 
 You could also use docker-compose file to start jypyter notebook and tensorboard
      	

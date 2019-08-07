@@ -4,7 +4,6 @@
     "checkpoint_dir": "models/weights",
     "tb_log_file_dir": "tb_logs/"
   },
-
   "network": {
     "encoder": {
       "in_channels": 2,
@@ -35,10 +34,10 @@
     
   "training": {
      "num_epochs": 400,
-     "batch_size": 32,
+     "batch_size": 16,
 
-     "min_L": 32,
-     "n_views": 32,
+     "min_L": 16, 
+     "n_views": 16,
      "n_workers": 4,
      "crop": 3,
 
@@ -54,6 +53,12 @@
     "patch_size": 64,
     "val_proportion": 0.10,
     "lambda": 0.000001
+  },
+  "experiment": {
+    "reference":["median","mean","random"],
+    "multi_frame":[16,12,8,4],
+    "interpolation":["lancoz","bilinear"],
+    "order_matter":[0,0.1,10,100]
   }
 
 }

@@ -172,7 +172,7 @@ class Decoder(nn.Module):
 class HRNet(nn.Module):
     ''' HRNet, a neural network for multi-frame super resolution (MFSR) by recursive fusion. '''
 
-    def __init__(self, config):
+    def __init__(self, config, reference):
         '''
         Args:
             config : dict, configuration file
@@ -183,7 +183,7 @@ class HRNet(nn.Module):
         self.fuse = RecuversiveNet(config["recursive"])
         self.decode = Decoder(config["decoder"])
 
-    def forward(self, lrs, alphas):
+    def forward(self, lrs, alphas, reference='median'):
         '''
         Super resolves a batch of low-resolution images.
         Args:
@@ -192,18 +192,39 @@ class HRNet(nn.Module):
         Returns:
             srs: tensor (B, C_out, W, H), super-resolved images
         '''
-
+        #TODO: modifiaction
         batch_size, seq_len, heigth, width = lrs.shape
         lrs = lrs.view(-1, seq_len, 1, heigth, width)
         alphas = alphas.view(-1, seq_len, 1, 1, 1)
 
-        refs, _ = torch.median(lrs[:, :9], 1, keepdim=True)  # reference image aka anchor, shared across multiple views
-        refs = refs.repeat(1, seq_len, 1, 1, 1)
-        stacked_input = torch.cat([lrs, refs], 2) # tensor (B, L, 2*C_in, W, H)
+        # refs, _ = torch.median(lrs[:, :9], 1, keepdim=True)  # reference image aka anchor, shared across multiple views
+        ## Mean reference
+        if reference == 'mean':
+            refs, _ = torch.mean(lrs[:, :9], 1, keepdim=True)
+            refs = refs.repeat(1, seq_len, 1, 1, 1)
+            stacked_input = torch.cat([lrs, refs], 2)  # tensor (B, L, 2*C_in, W, H)
+            stacked_input = stacked_input.view(batch_size * seq_len, 2, width, heigth)
+            layer1 = self.encode(stacked_input)  # encode input tensor
+            layer1 = layer1.view(batch_size, seq_len, -1, width, heigth)  # tensor (B, L, C, W, H)
+        elif reference == 'median':
+            refs, _ = torch.median(lrs[:, :9], 1, keepdim=True)  # reference image
+            refs = refs.repeat(1, seq_len, 1, 1, 1)
+            stacked_input = torch.cat([lrs, refs], 2)  # tensor (B, L, 2*C_in, W, H)
+
+            stacked_input = stacked_input.view(batch_size * seq_len, 2, width, heigth)
+            layer1 = self.encode(stacked_input)  # encode input tensor
+            layer1 = layer1.view(batch_size, seq_len, -1, width, heigth)  # tensor (B, L, C, W, H)
+        elif reference == 'None':
+            stacked_input = lrs.view(batch_size * seq_len, 1, width, heigth)
+            layer1 = self.encode(stacked_input)  # encode input tensor
+            layer1 = layer1.view(batch_size, seq_len, -1, width, heigth)  # tensor (B, L, C, W, H)
+
+        # refs = refs.repeat(1, seq_len, 1, 1, 1)
+        # stacked_input = torch.cat([lrs, refs], 2) # tensor (B, L, 2*C_in, W, H)
         
-        stacked_input = stacked_input.view(batch_size * seq_len, 2, width, heigth)
-        layer1 = self.encode(stacked_input) # encode input tensor
-        layer1 = layer1.view(batch_size, seq_len, -1, width, heigth) # tensor (B, L, C, W, H)
+        # stacked_input = stacked_input.view(batch_size * seq_len, 2, width, heigth)
+        # layer1 = self.encode(stacked_input) # encode input tensor
+        # layer1 = layer1.view(batch_size, seq_len, -1, width, heigth) # tensor (B, L, C, W, H)
 
         # fuse, upsample
         recursive_layer = self.fuse(layer1, alphas)  # fuse hidden states (B, C, W, H)

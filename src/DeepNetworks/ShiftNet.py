@@ -82,7 +82,7 @@ class ShiftNet(nn.Module):
         out = self.fc2(out)
         return out
 
-    def transform(self, theta, I, device="cpu"):
+    def transform(self, theta, I, device="cpu",interpolation='lanczos'):
         '''
         Shifts images I by theta with Lanczos interpolation.
         Args:
@@ -93,7 +93,11 @@ class ShiftNet(nn.Module):
         '''
 
         self.theta = theta
-        new_I = lanczos.lanczos_shift(img=I.transpose(0, 1),
-                                      shift=self.theta.flip(-1),  # (dx, dy) from register_batch -> flip
-                                      a=3, p=5)[:, None]
+        if interpolation == 'lanczos':
+            new_I = lanczos.lanczos_shift(img=I.transpose(0, 1),
+                                        shift=self.theta.flip(-1),  # (dx, dy) from register_batch -> flip
+                                        a=3, p=5)[:, None]
+        elif interpolation == 'bilinear':
+            # for bilinear
+            new_I = lanczos.bilinear(I,theta,mode='translation',device='cpu')
         return new_I

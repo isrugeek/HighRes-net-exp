@@ -22,6 +22,9 @@ from Evaluator import shift_cPSNR
 from utils import getImageSetDirectories, readBaselineCPSNR, collateFunction
 from tensorboardX import SummaryWriter
 
+import numpy as np
+
+
 
 def register_batch(shiftNet, lrs, reference):
     """
@@ -32,6 +35,7 @@ def register_batch(shiftNet, lrs, reference):
         reference: tensor (batch size, W, H), reference images to shift
     Returns:
         thetas: tensor (batch size, views, 2)
+
     """
     
     n_views = lrs.size(1)
@@ -44,7 +48,7 @@ def register_batch(shiftNet, lrs, reference):
     return thetas
 
 
-def apply_shifts(shiftNet, images, thetas, device):
+def apply_shifts(shiftNet, images, thetas, device, experiment, interpolation):  # regis_model, srs, shifts, device, experiment, interpolation
     """
     Applies sub-pixel translations to images with Lanczos interpolation.
     Args:
@@ -58,7 +62,10 @@ def apply_shifts(shiftNet, images, thetas, device):
     batch_size, n_views, height, width = images.shape
     images = images.view(-1, 1, height, width)
     thetas = thetas.view(-1, 2)
-    new_images = shiftNet.transform(thetas, images, device=device)
+    if experiment is True:
+        new_images = shiftNet.transform(thetas, images, device=device,interpolation=interpolation)
+    else:
+        new_images = shiftNet.transform(thetas, images, device=device)
 
     return new_images.view(-1, n_views, images.size(2), images.size(3))
 
@@ -106,7 +113,7 @@ def get_crop_mask(patch_size, crop_size):
     return torch_mask
 
 
-def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, baseline_cpsnrs, config):
+def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, baseline_cpsnrs, config, experiment, beta, l_views, interpolation, reference):
     """
     Trains HRNet and ShiftNet for Multi-Frame Super Resolution (MFSR), and saves best model.
     Args:
@@ -123,8 +130,19 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
     num_epochs = config["training"]["num_epochs"]
     batch_size = config["training"]["batch_size"]
     n_views = config["training"]["n_views"]
-    min_L = config["training"]["min_L"]  # minimum number of views
-    beta = config["training"]["beta"]
+    
+    if experiment is True:
+        beta = beta
+        min_L = l_views
+    else:
+        min_L = config["training"]["min_L"]  # minimum number of views
+        beta = config["training"]["beta"]
+    # min_L = config["training"]["min_L"]  # minimum number of views
+    # beta = config["training"]["beta"]
+    ## orders matters
+
+    # beta = [0,.1,10,100]
+    ## orders matters
 
     subfolder_pattern = 'batch_{}_views_{}_min_{}_beta_{}_time_{}'.format(
         batch_size, n_views, min_L, beta, f"{datetime.datetime.now():%Y-%m-%d-%H-%M-%S-%f}")
@@ -177,7 +195,7 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
             shifts = register_batch(regis_model,
                                     srs[:, :, offset:(offset + 128), offset:(offset + 128)],
                                     reference=hrs[:, offset:(offset + 128), offset:(offset + 128)].view(-1, 1, 128, 128))
-            srs_shifted = apply_shifts(regis_model, srs, shifts, device)[:, 0]
+            srs_shifted = apply_shifts(regis_model, srs, shifts, device, experiment, interpolation)[:, 0]
 
             # Training loss
             cropped_mask = torch_mask[0] * hr_maps  # Compute current mask (Batch size, W, H)
@@ -230,9 +248,14 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
         writer.add_scalar("train/val_loss", val_score, epoch)
         scheduler.step(val_score)
     writer.close()
+    train_loss_his = np.array(train_loss)
+    val_loss_hist = np.array(val_score)
+    np.savetxt("log_results/train_loss_reference_{}_beta_{}_interpolation_{}_l_views_{}.txt".format(reference, beta,interpolation,l_views), train_loss_his, delimiter=",")
+    ## 
+    np.savetxt("log_results/val_loss_reference_{}_beta_{}_interpolation_{}_l_views_{}.txt".format(reference, beta, interpolation, l_views), val_loss_hist, delimiter=",")
 
 
-def main(config):
+def main(config,experiment,c_beta, reference, l_views, interpolation):
     """
     Given a configuration, trains HRNet and ShiftNet for Multi-Frame Super Resolution (MFSR), and saves best model.
     Args:
@@ -246,8 +269,8 @@ def main(config):
     torch.backends.cudnn.benchmark = False
 
     # Initialize the network based on the network configuration
-    fusion_model = HRNet(config["network"])
-    regis_model = ShiftNet()
+    fusion_model = HRNet(config["network"], reference)
+    regis_model = ShiftNet(experiment)
 
     optimizer = optim.Adam(list(fusion_model.parameters()) + list(regis_model.parameters()), lr=config["training"]["lr"])  # optim
     # ESA dataset
@@ -268,9 +291,14 @@ def main(config):
     batch_size = config["training"]["batch_size"]
     n_workers = config["training"]["n_workers"]
     n_views = config["training"]["n_views"]
-    min_L = config["training"]["min_L"]  # minimum number of views
-    beta = config["training"]["beta"]
-
+    ## new
+    if experiment is True:
+        beta = c_beta
+        min_L = l_views
+    else:
+        min_L = config["training"]["min_L"]  # minimum number of views
+        beta = config["training"]["beta"]
+    ## new
     train_dataset = ImagesetDataset(imset_dir=train_list, config=config["training"],
                                     top_k=n_views, beta=beta)
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size,
@@ -291,13 +319,28 @@ def main(config):
     # Train model
     torch.cuda.empty_cache()
 
-    trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, baseline_cpsnrs, config)
+    trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, baseline_cpsnrs, config, experiment, beta, l_views, interpolation, reference)
 
+## s/o to stackoverflow
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", help="path of the config file", default='config/config.json')
+    parser.add_argument("--experiment", type=str2bool, nargs='?',const=True,default=False,help="To put in experiment mode")
+    parser.add_argument("--beta", type=float, help="Beta value")
+    parser.add_argument("--reference",help="Reference either median, mean or none")
+    parser.add_argument("--l_views",type=int,help="multiframe for lres")
+    parser.add_argument("--interpolation",help="interpolation either lancoz or bilinear")
 
     args = parser.parse_args()
     assert os.path.isfile(args.config)
@@ -305,4 +348,4 @@ if __name__ == '__main__':
     with open(args.config, "r") as read_file:
         config = json.load(read_file)
 
-    main(config)
+    main(config, args.experiment, args.beta, args.reference, args.l_views, args.interpolation)
