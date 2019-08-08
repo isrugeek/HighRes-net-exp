@@ -23,6 +23,7 @@ from utils import getImageSetDirectories, readBaselineCPSNR, collateFunction
 from tensorboardX import SummaryWriter
 
 import numpy as np
+import pandas as pd
 
 
 
@@ -114,6 +115,8 @@ def get_crop_mask(patch_size, crop_size):
 
 
 def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, baseline_cpsnrs, config, experiment, beta, l_views, interpolation, reference):
+    epochs_name, train_log, val_log = [],[],[]
+    loss_log = {}
     """
     Trains HRNet and ShiftNet for Multi-Frame Super Resolution (MFSR), and saves best model.
     Args:
@@ -240,7 +243,9 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
             torch.save(regis_model.state_dict(),
                        os.path.join(checkpoint_dir_run, 'ShiftNet.pth'))
             best_score = val_score
-
+        train_log.append(train_loss)
+        val_log.append(val_score)
+        epochs_name.append(epoch)
         writer.add_image('SR Image', (srs[0] - np.min(srs[0])) / np.max(srs[0]), epoch, dataformats='HW')
         error_map = hrs[0] - srs[0]
         writer.add_image('Error Map', error_map, epoch, dataformats='HW')
@@ -248,11 +253,11 @@ def trainAndGetBestModel(fusion_model, regis_model, optimizer, dataloaders, base
         writer.add_scalar("train/val_loss", val_score, epoch)
         scheduler.step(val_score)
     writer.close()
-    train_loss_his = np.array(train_loss)
-    val_loss_hist = np.array(val_score)
-    np.savetxt("log_results/train_loss_reference_{}_beta_{}_interpolation_{}_l_views_{}.txt".format(reference, beta,interpolation,l_views), train_loss_his, delimiter=",")
-    ## 
-    np.savetxt("log_results/val_loss_reference_{}_beta_{}_interpolation_{}_l_views_{}.txt".format(reference, beta, interpolation, l_views), val_loss_hist, delimiter=",")
+
+    df = pd.DataFrame(epochs_name, columns=["Epoch"])
+    df["Train Loss"]=train_log
+    df["Val Loss"]=val_log
+    export_csv = df.to_csv(r"./log_results/exp_loss_reference_{}_beta_{}_interpolation_{}_l_views_{}.csv".format(reference, beta, interpolation, l_views),index=None, header=True)
 
 
 def main(config,experiment,c_beta, reference, l_views, interpolation):

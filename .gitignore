@@ -1,7 +1,11 @@
 data/
+slurm/
+models/
+log_results/
 tb_logs/
 __pycache__/
 .pytest_cache/
+.vscode/
 src.egg-info/
 .ipynb_checkpoints
 .idea
