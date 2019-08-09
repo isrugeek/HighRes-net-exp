@@ -99,5 +99,5 @@ class ShiftNet(nn.Module):
                                         a=3, p=5)[:, None]
         elif interpolation == 'bilinear':
             # for bilinear
-            new_I = lanczos.bilinear(I,theta,mode='translation',device='cpu')
+            new_I = lanczos.bilinear(I,theta,mode='translation')
         return new_I

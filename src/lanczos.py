@@ -108,7 +108,7 @@ def lanczos_shift(img, shift, p=3, a=3):
 
     return I_s.squeeze()  # , k.squeeze()
     
-def bilinear(I, theta, mode='translation',device='cpu'):
+def bilinear(I, theta, mode='translation',device='cuda:0'):
     ## shift images I (B,C,H,W) by traslation theta (b,2)
     theta = theta
     H = torch.eye(3).to(device)
